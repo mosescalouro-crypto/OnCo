@@ -520,12 +520,27 @@ async function chemblTargets(): Promise<Envelope<ChemblTarget> | null> {
 
 type EvenOneCompany = { name: string; website: string; tag: string };
 const EVENONE_URL = "https://evenone.ventures/";
-/** Even One Ventures embeds its portfolio as a JavaScript array (`companies = [...]`) in the page; parse it rather than the rendered tiles. */
-function parseEvenOne(html: string): EvenOneCompany[] {
-  const i = html.indexOf("companies = ["); if (i < 0) return [];
-  const j = html.indexOf("];", i); const src = html.slice(i + "companies = ".length, j + 1);
-  const arr = new Function("return " + src)() as Array<{ name?: string; url?: string; tag?: string }>;
-  return arr.filter((c) => c && c.name).map((c) => ({ name: String(c.name).trim(), website: String(c.url ?? "").trim(), tag: String(c.tag ?? "").trim() }));
+/**
+ * Even One Ventures embeds its portfolio as a JavaScript array (`companies = [...]`) in the page.
+ * Read only quoted string fields from object literals. Never evaluate the page as JavaScript: the weekly
+ * refresh-universe workflow has contents:write and auto-merges when gates pass.
+ */
+export function parseEvenOne(html: string): EvenOneCompany[] {
+  const i = html.indexOf("companies = [");
+  if (i < 0) return [];
+  const j = html.indexOf("];", i);
+  if (j < 0) return [];
+  const src = html.slice(i + "companies = ".length, j + 1);
+  const items: EvenOneCompany[] = [];
+  for (const block of src.match(/\{[^{}]*\}/g) ?? []) {
+    const fields: Record<string, string> = {};
+    const re = /\b(name|url|tag)\s*:\s*(["'])((?:\\.|(?!\2)[^\\])*)\2/g;
+    for (const m of block.matchAll(re)) fields[m[1]] = m[3].replace(/\\(["'\\])/g, "$1");
+    const name = (fields.name ?? "").trim();
+    if (!name) continue;
+    items.push({ name, website: (fields.url ?? "").trim(), tag: (fields.tag ?? "").trim() });
+  }
+  return items;
 }
 async function evenone(): Promise<Envelope<EvenOneCompany> | null> {
   const html = await getText(EVENONE_URL, { accept: "text/html" });

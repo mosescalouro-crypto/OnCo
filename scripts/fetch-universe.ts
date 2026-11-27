@@ -520,12 +520,42 @@ async function chemblTargets(): Promise<Envelope<ChemblTarget> | null> {
 
 type EvenOneCompany = { name: string; website: string; tag: string };
 const EVENONE_URL = "https://evenone.ventures/";
-/** Even One Ventures embeds its portfolio as a JavaScript array (`companies = [...]`) in the page; parse it rather than the rendered tiles. */
-function parseEvenOne(html: string): EvenOneCompany[] {
-  const i = html.indexOf("companies = ["); if (i < 0) return [];
-  const j = html.indexOf("];", i); const src = html.slice(i + "companies = ".length, j + 1);
-  const arr = new Function("return " + src)() as Array<{ name?: string; url?: string; tag?: string }>;
-  return arr.filter((c) => c && c.name).map((c) => ({ name: String(c.name).trim(), website: String(c.url ?? "").trim(), tag: String(c.tag ?? "").trim() }));
+
+/** Read a quoted string after `key:` in an object literal. Does not evaluate JavaScript. */
+function quotedField(obj: string, key: string): string | undefined {
+  const m = new RegExp(String.raw`\b${key}\s*:\s*(["'])((?:\\.|.)*?)(\1)`).exec(obj);
+  if (!m) return undefined;
+  return m[2]
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\([nrt\\'"])/g, (_, c: string) => ({ n: "\n", r: "\r", t: "\t", "\\": "\\", "'": "'", '"': '"' }[c] ?? c));
+}
+
+/**
+ * Even One Ventures embeds its portfolio as a JavaScript array (`companies = [...]`) in the page.
+ * Parse quoted `name`/`url`/`tag` fields only — never evaluate the slice. The weekly refresh runs this
+ * on a GitHub-hosted runner with contents:write; `new Function` would give a compromised page code
+ * execution on that runner.
+ */
+export function parseEvenOne(html: string): EvenOneCompany[] {
+  const i = html.indexOf("companies = [");
+  if (i < 0) return [];
+  const j = html.indexOf("];", i);
+  if (j < 0) return [];
+  const src = html.slice(i + "companies = ".length, j + 1);
+  const items: EvenOneCompany[] = [];
+  const objRe = /\{[^{}]*\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = objRe.exec(src))) {
+    const name = quotedField(m[0], "name");
+    if (!name?.trim()) continue;
+    items.push({
+      name: name.trim(),
+      website: (quotedField(m[0], "url") ?? "").trim(),
+      tag: (quotedField(m[0], "tag") ?? "").trim(),
+    });
+  }
+  return items;
 }
 async function evenone(): Promise<Envelope<EvenOneCompany> | null> {
   const html = await getText(EVENONE_URL, { accept: "text/html" });

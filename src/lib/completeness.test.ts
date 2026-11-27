@@ -3,7 +3,7 @@ import { UNIVERSE, UNIVERSE_LISTS } from "@/data/universe";
 import { cancerKeys, companyKey, companyKeys, completeness, drugKeys, headline, host, institutionKeys, KEGG_TO_ONCO, nameParts, norm, pctOf, personKey, targetKeys } from "./completeness";
 import { graph } from "./graph";
 import { KINDS } from "./kinds";
-import { parseKeggCancer, parseNciDrugs, parseNciTypes, parseNhsAlliances, sponsorFromOceSummary } from "../../scripts/fetch-universe";
+import { parseEvenOne, parseKeggCancer, parseNciDrugs, parseNciTypes, parseNhsAlliances, sponsorFromOceSummary } from "../../scripts/fetch-universe";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -211,5 +211,21 @@ describe("fetch-universe parsers", () => {
     expect(sponsorFromOceSummary("granted accelerated approval to adagrasib (Krazati; Mirati Therapeutics, Inc.) plus cetuximab")).toBe("Mirati Therapeutics, Inc.");
     expect(sponsorFromOceSummary("granted accelerated approval to sunvozertinib (Zegfrovy, Dizal (Jiangsu) Pharmaceutical Co., Ltd.) for adult")).toBe("Dizal (Jiangsu) Pharmaceutical Co., Ltd.");
     expect(sponsorFromOceSummary("The FDA is providing this communication about capecitabine (Xeloda) and fluorouracil (5-FU)")).toBeUndefined();
+  });
+
+  it("reads Even One portfolio objects from quoted fields and does not evaluate the slice", () => {
+    const g = globalThis as typeof globalThis & { __evenonePwned?: boolean };
+    delete g.__evenonePwned;
+    const html = `companies = [
+      { name: "Arden Bio", url: "https://www.arden.bio/", tag: "immunology" },
+      { name: 'Echo Immune', url: 'https://www.echoimmune.com/', tag: "oncology" },
+      { name: (globalThis.__evenonePwned = true, "Pwned"), url: "https://evil.example/", tag: "x" }
+    ];`;
+    expect(parseEvenOne(html)).toEqual([
+      { name: "Arden Bio", website: "https://www.arden.bio/", tag: "immunology" },
+      { name: "Echo Immune", website: "https://www.echoimmune.com/", tag: "oncology" },
+    ]);
+    expect(g.__evenonePwned).toBeUndefined();
+    expect(parseEvenOne("<p>no array</p>")).toEqual([]);
   });
 });

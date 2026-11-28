@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NameMatcher, decodeEntities, normaliseDate, parseFeed, parseLongDate, parseOcePage, stripTags } from "./feed-utils";
+import { NameMatcher, decodeEntities, isHttpUrl, normaliseDate, parseFeed, parseLongDate, parseOcePage, stripTags } from "./feed-utils";
 
 const ENTITIES = [
   { id: "trastuzumab-deruxtecan", kind: "drug", name: "Trastuzumab deruxtecan", brand: "Enhertu", code: "DS-8201a", aka: ["T-DXd"] },
@@ -58,5 +58,18 @@ describe("parsers", () => {
     expect(normaliseDate("2026-09-01-07:00")).toBe("2026-09-01");
     expect(decodeEntities("A &ndash; B &#8211; C &#x2013; D &nbsp;E")).toBe("A – B – C – D  E");
     expect(stripTags("<p>Hi <b>there</b></p>")).toBe("Hi there");
+  });
+  it("drops javascript:, data: and non-http feed links", () => {
+    expect(isHttpUrl("https://x.test/a")).toBe(true);
+    expect(isHttpUrl("javascript:alert(1)")).toBe(false);
+    const xml = `<rss><channel>
+      <item><title>Ok</title><link>https://x.test/ok</link></item>
+      <item><title>Script</title><link>javascript:alert(document.domain)</link></item>
+      <item><title>Data</title><link>data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;</link></item>
+      <item><title>Relative</title><link>/cancer</link></item>
+    </channel></rss>`;
+    const items = parseFeed(xml);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ title: "Ok", link: "https://x.test/ok" });
   });
 });

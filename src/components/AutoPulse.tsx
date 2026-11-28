@@ -12,6 +12,9 @@ export type AutoPulseFeed = { id: string; name: string; homepage: string; url: s
 export type AutoPulseItem = { feedId: string; title: string; url: string; date?: string; refs: string[] };
 export type AutoPulseSnapshot = { fetched: string; feeds: AutoPulseFeed[]; items: AutoPulseItem[] };
 
+/** Pulse titles must not become javascript: or data: hrefs if a snapshot ever carried one. */
+const httpHref = (u: string) => (/^https?:\/\//i.test(u) ? u : undefined);
+
 /**
  * The automated stream beside the curated pulse: every item a source published recently, unedited, with the
  * OnCo objects its title names. Filter by source or show only items that touch something in the corpus.
@@ -57,8 +60,8 @@ export function AutoPulse({ snap, refs }: { snap: AutoPulseSnapshot; refs: Recor
               return (
                 <tr key={it.url}>
                   <td className="font-mono text-xs text-muted whitespace-nowrap">{it.date ?? ""}</td>
-                  <td className="text-muted whitespace-nowrap">{f ? <a href={f.homepage} rel="noopener" className="hover:underline">{f.name}</a> : it.feedId}</td>
-                  <td><a href={it.url} rel="noopener" className="hover:underline">{it.title}</a></td>
+                  <td className="text-muted whitespace-nowrap">{f ? (httpHref(f.homepage) ? <a href={f.homepage} rel="noopener" className="hover:underline">{f.name}</a> : f.name) : it.feedId}</td>
+                  <td>{httpHref(it.url) ? <a href={it.url} rel="noopener" className="hover:underline">{it.title}</a> : it.title}</td>
                   <td className="hidden md:table-cell"><div className="flex flex-wrap gap-1">{it.refs.map(chip)}</div></td>
                 </tr>
               );
@@ -67,7 +70,7 @@ export function AutoPulse({ snap, refs }: { snap: AutoPulseSnapshot; refs: Recor
         </table>
         {filtered.length === 0 && <div className="px-6 py-12 text-center text-muted text-sm">Nothing matches. Clear a filter.</div>}
       </div>
-      <p className="text-xs text-muted mt-3">Fetched {snap.fetched}. Sources: {snap.feeds.map((f, i) => <span key={f.id}>{i > 0 && ", "}<a href={f.homepage} rel="noopener" className="hover:underline">{f.name}</a>{f.ok ? "" : " (unreachable at fetch time)"}</span>)}. Matching is by name, brand, code and alias in the title; it is a prompt to look, not a judgement.</p>
+      <p className="text-xs text-muted mt-3">Fetched {snap.fetched}. Sources: {snap.feeds.map((f, i) => <span key={f.id}>{i > 0 && ", "}{httpHref(f.homepage) ? <a href={f.homepage} rel="noopener" className="hover:underline">{f.name}</a> : f.name}{f.ok ? "" : " (unreachable at fetch time)"}</span>)}. Matching is by name, brand, code and alias in the title; it is a prompt to look, not a judgement.</p>
     </div>
   );
 }

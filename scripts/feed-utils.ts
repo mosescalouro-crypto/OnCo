@@ -95,6 +95,11 @@ export function tagText(xml: string, tag: string): string | undefined {
 
 export type FeedItem = { title: string; link: string; date?: string; summary?: string };
 
+/** Absolute http(s) URL. Rejects javascript:, data:, and anything else a feed might put in <link>. */
+export function isHttpUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s.trim());
+}
+
 /** Parse RSS 2.0, RSS 1.0 (RDF) and Atom into a flat item list. Dates are normalised to YYYY-MM-DD when parseable. */
 export function parseFeed(xml: string): FeedItem[] {
   const items: FeedItem[] = [];
@@ -106,10 +111,11 @@ export function parseFeed(xml: string): FeedItem[] {
       const href = b.match(/<link[^>]*?href="([^"]+)"/i)?.[1] ?? b.match(/<item[^>]*rdf:about="([^"]+)"/i)?.[1];
       if (href) link = decodeEntities(href);
     }
-    if (!link) { const guid = tagText(b, "guid"); if (guid && /^https?:/.test(guid)) link = guid; }
+    if (!link) { const guid = tagText(b, "guid"); if (guid && isHttpUrl(guid)) link = guid; }
     const rawDate = tagText(b, "pubDate") ?? tagText(b, "dc:date") ?? tagText(b, "published") ?? tagText(b, "updated") ?? tagText(b, "prism:publicationDate") ?? tagText(b, "prism:coverDate");
     const summary = tagText(b, "description") ?? tagText(b, "summary") ?? tagText(b, "content");
-    if (!title || !link) continue;
+    link = link.trim();
+    if (!title || !isHttpUrl(link)) continue;
     items.push({ title, link: link.replace(/\?(rss|af)=[^&]*$/, ""), date: normaliseDate(rawDate), summary: summary?.slice(0, 600) });
   }
   return items;

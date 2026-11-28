@@ -10,7 +10,7 @@
  * Run: npx tsx scripts/fetch-pulse.ts   Weekly via .github/workflows/refresh-pulse.yml.
  */
 import { graph } from "../src/lib/graph";
-import { FDA_OCE_URL, NameMatcher, ONCO_WORDS, getText, isoDaysAgo, matchableFromGraph, parseFeed, parseOcePage, publicPath, readJson, sleep, today, writeJson, type FeedItem } from "./feed-utils";
+import { FDA_OCE_URL, NameMatcher, ONCO_WORDS, getText, isHttpUrl, isoDaysAgo, matchableFromGraph, parseFeed, parseOcePage, publicPath, readJson, sleep, today, writeJson, type FeedItem } from "./feed-utils";
 
 const OUT = publicPath("pulse", "auto.json");
 const KEEP_DAYS = 60;
@@ -117,7 +117,7 @@ async function main() {
     items = items.filter((i) => !i.date || i.date >= cutoff).slice(0, MAX_PER_FEED);
     let n = 0;
     for (const it of items) {
-      if (seen.has(it.link)) continue;
+      if (!isHttpUrl(it.link) || seen.has(it.link)) continue;
       seen.add(it.link);
       snap.items.push({ feedId: f.id, title: it.title, url: it.link, date: it.date, refs: matcher.match(`${it.title}. ${it.summary ?? ""}`).slice(0, 8) });
       n++;
@@ -130,7 +130,7 @@ async function main() {
   for (const pf of prev?.feeds ?? []) {
     const now = snap.feeds.find((x) => x.id === pf.id);
     if (now?.ok) continue;
-    const carried = (prev?.items ?? []).filter((i) => i.feedId === pf.id && (!i.date || i.date >= cutoff) && !seen.has(i.url));
+    const carried = (prev?.items ?? []).filter((i) => i.feedId === pf.id && isHttpUrl(i.url) && (!i.date || i.date >= cutoff) && !seen.has(i.url));
     for (const c of carried) { seen.add(c.url); snap.items.push(c); }
     if (now && carried.length) { now.count = carried.length; now.error = `${now.error}; showing ${carried.length} items from ${prev?.fetched}`; }
   }
